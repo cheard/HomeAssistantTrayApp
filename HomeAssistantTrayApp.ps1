@@ -22,12 +22,13 @@
 
 # Retrieve and parse server and token from Windows Credential Manager
 $homeAssistant = Get-StoredCredential -Target "HomeAssistant"
-$serverAddress = $homeAssistant.UserName
+$serverAddress = "http://"+$homeAssistant.UserName
 $headers = @{"Authorization" = "Bearer $($homeAssistant.GetNetworkCredential().Password)"; "Content-Type" = "application/json"}
 
 # Retrieve enabled Automations from HomeAssistant
 $states = Invoke-RestMethod -Method GET -Uri "$serverAddress/api/states" -Headers $headers
 $automations = $states | Where-Object {$_.entity_id -like "automation.*" -and $_.state -eq "on"} | Sort-Object -Property @{e={$_.attributes.friendly_name}}
+$scripts = $states | Where-Object {$_.entity_id -like "script.*"} | Sort-Object -Property @{e={$_.attributes.friendly_name}}
  
 # Add assemblies
 foreach ($assembly in @('System.Windows.Forms','PresentationFramework','System.Drawing','WindowsFormsIntegration')){
@@ -46,19 +47,47 @@ $haTool_Icon = New-Object System.Windows.Forms.NotifyIcon
 $haTool_Icon.Text = "HomeAssistant Tray Tool"
 $haTool_Icon.Icon = [System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap -Argument $iconStream).GetHIcon())
 $haTool_Icon.Visible = $true
+
+
  
 # Add all menus as context menus
 $contextmenu = New-Object System.Windows.Forms.ContextMenuStrip
 $haTool_Icon.ContextMenuStrip = $contextmenu
 
+
+#Create scripts submenu parent
+$automationMenu = New-Object System.Windows.Forms.ToolStripMenuItem
+$automationMenu.Text = "Automations"
+$haTool_Icon.ContextMenuStrip.Items.Add( $automationMenu )
+
 foreach ($automation in $automations) {
     $automationName = $automation.attributes.friendly_name
     $automationID = $($automation.entity_id.split('.')[1])
-    $menuItem = $haTool_Icon.ContextMenuStrip.Items.Add($automationName)
+    $menuItem = $automationMenu.DropDownItems.Add($automationName)
     #$menuItem.Text = $automationName
     $menuItem.Tag = $automationID
     $menuItem.add_Click({
         Invoke-RestMethod -Method POST -Body (@{entity_id = "automation.$($this.Tag)"} | ConvertTo-Json) -Uri "$serverAddress/api/services/automation/trigger" -Headers $headers
+    })
+}
+
+#$haTool_Icon.ContextMenuStrip.Items.Add("-")
+
+#Create scripts submenu parent
+$scriptsMenu = New-Object System.Windows.Forms.ToolStripMenuItem
+$scriptsMenu.Text = "Scripts"
+
+$haTool_Icon.ContextMenuStrip.Items.Add( $scriptsMenu )
+
+
+foreach ($script in $scripts) {
+    $scriptName = $script.attributes.friendly_name
+    $scriptID = $($script.entity_id.split('.')[1])
+    $menuItem = $scriptsMenu.DropDownItems.Add($scriptName)
+    $menuItem.Text = $scriptName
+    $menuItem.Tag = $scriptID
+    $menuItem.add_Click({
+        Invoke-RestMethod -Method POST -Body (@{entity_id = "script.$($this.Tag)"} | ConvertTo-Json) -Uri "$serverAddress/api/services/script/turn_on" -Headers $headers
     })
 }
 
