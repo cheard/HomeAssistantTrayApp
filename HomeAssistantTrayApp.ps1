@@ -22,7 +22,7 @@
 
 # Retrieve and parse server and token from Windows Credential Manager
 $homeAssistant = Get-StoredCredential -Target "HomeAssistant"
-$serverAddress = "http://"+$homeAssistant.UserName
+$serverAddress = $homeAssistant.UserName
 $headers = @{"Authorization" = "Bearer $($homeAssistant.GetNetworkCredential().Password)"; "Content-Type" = "application/json"}
 
 # Retrieve enabled Automations from HomeAssistant
@@ -83,6 +83,7 @@ $haTool_Icon.ContextMenuStrip.Items.Add( $scriptsMenu )
 foreach ($script in $scripts) {
     $scriptName = $script.attributes.friendly_name
     $scriptID = $($script.entity_id.split('.')[1])
+    $scriptDir = $($script.attributes.friendly_name.split('-')[0])
     $menuItem = $scriptsMenu.DropDownItems.Add($scriptName)
     $menuItem.Text = $scriptName
     $menuItem.Tag = $scriptID
@@ -93,6 +94,11 @@ foreach ($script in $scripts) {
 
 # Add a divider to the menu to separate Automations from app meta functions
 $haTool_Icon.ContextMenuStrip.Items.Add("-")
+
+$reloadScripts = $haTool_icon.ContextMenuStrip.Items.Add("Reload Scripts and Automations")
+$reloadScripts.Text = "Reload Scripts and Automations"
+
+
 
 $restart = $haTool_Icon.ContextMenuStrip.Items.Add("Restart")
 $restart.Text = "Relaunch Tray App"
@@ -123,6 +129,10 @@ $restart.add_Click({
     Stop-Process $pid
 })
 
+$reloadScripts.add_click({
+    Invoke-RestMethod -Method POST -Uri "$serverAddress/api/services/script/reload" -Headers $headers
+    Invoke-RestMethod -Method POST -Uri "$serverAddress/api/services/automation/reload" -Headers $headers
+    })
 # Hide the PowerShell window
 $psWindow = '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'
 $asyncwindow = Add-Type -MemberDefinition $psWindow -name Win32ShowWindowAsync -namespace Win32Functions -PassThru
